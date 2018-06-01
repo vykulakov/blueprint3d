@@ -86,12 +86,48 @@ var CameraButtons = function(blueprint3d) {
  */ 
 
 var ContextMenu = function(blueprint3d) {
-
   var scope = this;
-  var selectedItem;
   var three = blueprint3d.three;
+  var loading = $("#loading-modal");
+  var menuOpen = $("#context-menu-open");
+  var menuClose = $("#context-menu-close");
+
+  var metadata;
+  var selectedItem;
+  var openMetadata = {
+      itemName: "Open Custom Door",
+      resizable: true,
+      modelUrl: "models/js/Open_Door.json",
+      itemType: 7
+  };
+  var closeMetadata = {
+      itemName: "Closed Custom Door",
+      resizable: true,
+      modelUrl: "models/js/Closed_Door.json",
+      itemType: 7
+  };
+  var loaderCallback = function (geometry) {
+      geometry.boundingBox = selectedItem.geometry.boundingBox;
+      selectedItem.geometry = geometry;
+      selectedItem.metadata = metadata;
+      itemSelected(selectedItem);
+      three.needsUpdate();
+      loading.hide();
+  };
 
   function init() {
+    menuOpen.click(function() {
+        loading.show();
+        metadata = openMetadata;
+        blueprint3d.model.scene.loader.load(openMetadata.modelUrl, loaderCallback, undefined);
+    });
+
+    menuClose.click(function() {
+        loading.show();
+        metadata = closeMetadata;
+        blueprint3d.model.scene.loader.load(closeMetadata.modelUrl, loaderCallback, undefined);
+    });
+
     $("#context-menu-delete").click(function(event) {
         selectedItem.remove();
     });
@@ -123,6 +159,15 @@ var ContextMenu = function(blueprint3d) {
     $("#item-width").val(cmToIn(selectedItem.getWidth()).toFixed(0));
     $("#item-height").val(cmToIn(selectedItem.getHeight()).toFixed(0));
     $("#item-depth").val(cmToIn(selectedItem.getDepth()).toFixed(0));
+
+    menuOpen.hide();
+    menuClose.hide();
+    if (item.metadata.itemName === 'Open Custom Door') {
+        menuClose.show();
+    }
+    if (item.metadata.itemName === 'Closed Custom Door') {
+        menuOpen.show();
+    }
 
     $("#context-menu").show();
 

@@ -92,36 +92,84 @@ var ContextMenu = function(blueprint3d) {
   var menuOpen = $("#context-menu-open");
   var menuClose = $("#context-menu-close");
 
+  /**
+   * Метаданные объекта, геометрию которого мы собираемся установить в текущий выбранный объект.
+   */
   var metadata;
+
+  /**
+   * Текущий выбранный объект.
+   */
   var selectedItem;
+
+  /**
+   * Метаданные открытой двери.
+   *
+   * Расположены здесь для того, чтобы изменения примера не были раскиданы по всему коду, а находились
+   * по возможности в одном месте. В боевом коде лучше вынести в константы или файл конфигурации.
+   *
+   * openMetadata.depthInPercent - в качестве глубины двери по-умолчанию используется вся геометрическая
+   * глубина двери с учётом выступающей части двери. Из-за этого открытая дверь располагается неправильно.
+   * Для исправления ситуации вводится понятие эффективной глубины двери без учёта выступающих частей,
+   * которое используется при отображении двери на сцене. Значение 0,12 подобрано эмпирическим путём,
+   * но его можно вычислять исходя из параметров модели.
+   */
   var openMetadata = {
       itemName: "Open Custom Door",
       resizable: true,
       modelUrl: "models/js/Open_Door.json",
-      itemType: 7
+      itemType: 7,
+      depthInPercent: 0.12
   };
+    /**
+     * Метаданные закрытой двери.
+     *
+     * Расположены здесь для того, чтобы изменения примера не были раскиданы по всему коду, а находились
+     * по возможности в одном месте. В боевом коде лучше вынести в константы или файл конфигурации.
+     *
+     * closeMetadata.depthInPercent - в качестве глубины двери по-умолчанию используется вся геометрическая
+     * глубина двери с учётом выступающих частей двери (наличники). Из-за этого дверь полностью утопает в
+     * в стене, что выглядит не очень хорошо.
+     * Для исправления ситуации вводится понятие эффективной глубины двери без учёта выступающих частей,
+     * которое используется при отображении двери на сцене. Значение 0,40 подобрано эмпирическим путём,
+     * но его можно вычислять исходя из параметров модели.
+     */
   var closeMetadata = {
       itemName: "Closed Custom Door",
       resizable: true,
       modelUrl: "models/js/Closed_Door.json",
-      itemType: 7
+      itemType: 7,
+      depthInPercent: 0.40
   };
+
+  /**
+   * Обработчик события загрузки геометрии.
+   *
+   * Устанавливает в выбранный объект новую геометрию, загруженную из файла, и дополнительные данные, а
+   * затем заново отрисовывает объект на сцене.
+   */
   var loaderCallback = function (geometry) {
-      geometry.boundingBox = selectedItem.geometry.boundingBox;
-      selectedItem.geometry = geometry;
       selectedItem.metadata = metadata;
+      selectedItem.geometry = geometry;
+
+      fixGeometry();
       itemSelected(selectedItem);
-      three.needsUpdate();
       loading.hide();
   };
 
   function init() {
+    // Обработчик кнопки открытия двери.
+    // Сохраняет для будущего использования метаданные открытой двери и запускает процесс
+    // загрузки новой геометрии.
     menuOpen.click(function() {
         loading.show();
         metadata = openMetadata;
         blueprint3d.model.scene.loader.load(openMetadata.modelUrl, loaderCallback, undefined);
     });
 
+    // Обработчик кнопки закрытия двери.
+    // Сохраняет для будущего использования метаданные закрытой двери и запускает процесс
+    // загрузки новой геометрии.
     menuClose.click(function() {
         loading.show();
         metadata = closeMetadata;
@@ -160,12 +208,15 @@ var ContextMenu = function(blueprint3d) {
     $("#item-height").val(cmToIn(selectedItem.getHeight()).toFixed(0));
     $("#item-depth").val(cmToIn(selectedItem.getDepth()).toFixed(0));
 
+    // Отображаем кнопку закрытия или открытия двери в зависимости от того, какая дверь
+    // отображена сейчас.
+    metadata = undefined;
     menuOpen.hide();
     menuClose.hide();
-    if (item.metadata.itemName === 'Open Custom Door') {
+    if (item.metadata.itemName === openMetadata.itemName) {
         menuClose.show();
     }
-    if (item.metadata.itemName === 'Closed Custom Door') {
+    if (item.metadata.itemName === closeMetadata.itemName) {
         menuOpen.show();
     }
 
@@ -191,6 +242,33 @@ var ContextMenu = function(blueprint3d) {
   function itemUnselected() {
     selectedItem = null;
     $("#context-menu").hide();
+  }
+
+  /**
+   * Обновляем геометрию и исправляем смещение дверей по глубине, т. к. по-умолчанию они
+   * отображаются неправильно (описание см. выше) и отрисовываем новую геометрию на сцене.
+   *
+   * В идеале для дверей лучше сделать новый тип объекта, в котором уже можно переопределить
+   * конструктор и добавить методы для исправления/обновления геометрии, но для простоты
+   * соответствующий код пока размещён здесь.
+   */
+  function fixGeometry() {
+      selectedItem.geometry.computeBoundingBox();
+
+      // depth*metadata.depthInPercent - эффективная глубина двери, которая используется для
+      // корректного отображения двери в стене с учётом выступающих частей двери.
+      var depth = selectedItem.geometry.boundingBox.max.z - selectedItem.geometry.boundingBox.min.z;
+      selectedItem.geometry.applyMatrix(new THREE.Matrix4().makeTranslation(
+          -0.5 * (selectedItem.geometry.boundingBox.max.x + selectedItem.geometry.boundingBox.min.x),
+          -0.5 * (selectedItem.geometry.boundingBox.max.y + selectedItem.geometry.boundingBox.min.y),
+          -0.5 * (depth*metadata.depthInPercent + selectedItem.geometry.boundingBox.min.z)
+      ));
+
+      selectedItem.geometry.computeBoundingBox();
+      selectedItem.halfSize = selectedItem.objectHalfSize();
+
+      // Принудительно перерисовываем объект на сцене.
+      selectedItem.initObject();
   }
 
   init();

@@ -21,12 +21,6 @@ $(document).ready(function() {
       "type" : "7"
     },
     {
-        "name" : "Open Custom Door",
-        "image" : "models/thumbnails/thumbnail_Open_Door_preview.jpg",
-        "model" : "models/js/Open_Door.json",
-        "type" : "7"
-    },
-    {
       "name" : "Window",
       "image" : "models/thumbnails/thumbnail_window.png",
       "model" : "models/js/whitewindow.js",
